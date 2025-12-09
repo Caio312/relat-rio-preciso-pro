@@ -9,6 +9,7 @@ import { UncertainPointsTable } from './UncertainPointsTable';
 import { RecommendationsList } from './RecommendationsList';
 import { usePotentialData } from '@/hooks/usePotentialData';
 import { generatePDF } from '@/utils/pdfGenerator';
+import { generateWord } from '@/utils/wordGenerator';
 import { toast } from 'sonner';
 
 type TabType = 'editor' | '3d' | 'gradient' | 'stats';
@@ -17,6 +18,8 @@ export function PotentialMapGenerator() {
   const [activeTab, setActiveTab] = useState<TabType>('editor');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingWord, setIsGeneratingWord] = useState(false);
+  const [comments, setComments] = useState('');
   const [xInput, setXInput] = useState('0,00; 0,15; 0,30');
   const [yInput, setYInput] = useState(
     '1,94; 1,84; 1,74; 1,64; 1,54; 1,44; 1,34; 1,24; 1,14; 1,04; 0,94; 0,84; 0,74; 0,64; 0,54'
@@ -97,6 +100,7 @@ export function PotentialMapGenerator() {
           gradients,
           recommendations,
           params,
+          comments,
         },
         {
           plot2d: plot2dRef.current,
@@ -113,7 +117,40 @@ export function PotentialMapGenerator() {
     } finally {
       setIsGeneratingPDF(false);
     }
-  }, [data, stats, uncertainPoints, gradients, recommendations, params]);
+  }, [data, stats, uncertainPoints, gradients, recommendations, params, comments]);
+
+  const handleGenerateWord = useCallback(async () => {
+    setIsGeneratingWord(true);
+    toast.info('Gerando relatório Word...');
+
+    try {
+      await generateWord(
+        {
+          data,
+          stats,
+          uncertainPoints,
+          gradients,
+          recommendations,
+          params,
+          comments,
+        },
+        {
+          plot2d: plot2dRef.current,
+          plot3d: plot3dRef.current,
+          plotHist: plotHistRef.current,
+          plotPie: plotPieRef.current,
+          plotGradient: plotGradientRef.current,
+        }
+      );
+      toast.success('Relatório Word gerado com sucesso!');
+    } catch (error) {
+      console.error('Error generating Word:', error);
+      toast.error('Erro ao gerar Word. Tente novamente.');
+    } finally {
+      setIsGeneratingWord(false);
+    }
+  }, [data, stats, uncertainPoints, gradients, recommendations, params, comments]);
+
 
   const theme = useMemo(
     () => ({
@@ -271,9 +308,11 @@ export function PotentialMapGenerator() {
         onImportCSV={handleImportCSV}
         onExportCSV={handleExportCSV}
         onGeneratePDF={handleGeneratePDF}
+        onGenerateWord={handleGenerateWord}
         isDarkMode={isDarkMode}
         onToggleDarkMode={toggleDarkMode}
         isGeneratingPDF={isGeneratingPDF}
+        isGeneratingWord={isGeneratingWord}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden">
