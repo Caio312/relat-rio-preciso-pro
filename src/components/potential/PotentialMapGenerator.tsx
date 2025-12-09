@@ -134,14 +134,37 @@ export function PotentialMapGenerator() {
     [theme]
   );
 
-  const reversedZ = useMemo(() => [...data.matrix].reverse(), [data.matrix]);
-  const reversedY = useMemo(() => [...data.yVals].reverse(), [data.yVals]);
-  const flatValues = useMemo(() => data.matrix.flat().map((v) => v * 1000), [data.matrix]);
+  // Ensure data is valid before computing derived values
+  const hasValidData = useMemo(() => {
+    return data && 
+           data.matrix && 
+           data.matrix.length > 0 && 
+           data.xVals && 
+           data.xVals.length > 0 && 
+           data.yVals && 
+           data.yVals.length > 0;
+  }, [data]);
+
+  const reversedZ = useMemo(() => {
+    if (!hasValidData) return [[0]];
+    return [...data.matrix].reverse();
+  }, [data.matrix, hasValidData]);
+
+  const reversedY = useMemo(() => {
+    if (!hasValidData) return [0];
+    return [...data.yVals].reverse();
+  }, [data.yVals, hasValidData]);
+
+  const flatValues = useMemo(() => {
+    if (!hasValidData) return [0];
+    return data.matrix.flat().map((v) => v * 1000);
+  }, [data.matrix, hasValidData]);
 
   const maxGradient = useMemo(
     () => (gradients.length ? Math.max(...gradients.map((g) => g.gradient)) : 0),
     [gradients]
   );
+  
   const criticalGradients = useMemo(
     () => gradients.filter((g) => g.gradient > 100).length,
     [gradients]
@@ -153,6 +176,86 @@ export function PotentialMapGenerator() {
     { id: 'gradient' as const, label: 'Gradientes', icon: AreaChart },
     { id: 'stats' as const, label: 'Relatório', icon: PieChart },
   ];
+
+  // 2D contour plot data
+  const contourData = useMemo(() => {
+    if (!hasValidData) return [];
+    return [{
+      z: reversedZ,
+      x: data.xVals,
+      y: reversedY,
+      type: 'contour' as const,
+      colorscale: params.colorscale,
+      contours: {
+        coloring: 'heatmap',
+        showlabels: true,
+        labelfont: { color: 'white', size: 10 },
+      },
+      line: { color: isDarkMode ? '#64748b' : '#334155', width: 0.5 },
+      colorbar: { title: 'V', tickformat: '.2f' },
+    }];
+  }, [hasValidData, reversedZ, data.xVals, reversedY, params.colorscale, isDarkMode]);
+
+  // 3D surface plot data
+  const surfaceData = useMemo(() => {
+    if (!hasValidData) return [];
+    return [{
+      z: reversedZ,
+      x: data.xVals,
+      y: reversedY,
+      type: 'surface' as const,
+      colorscale: params.colorscale,
+      colorbar: { title: 'V' },
+    }];
+  }, [hasValidData, reversedZ, data.xVals, reversedY, params.colorscale]);
+
+  // Gradient scatter data
+  const gradientData = useMemo(() => {
+    if (gradients.length === 0) return [];
+    return [{
+      x: gradients.map((g) => g.x),
+      y: gradients.map((g) => g.y),
+      mode: 'markers' as const,
+      type: 'scatter' as const,
+      marker: {
+        color: gradients.map((g) => g.gradient),
+        size: 14,
+        colorscale: 'Hot',
+        symbol: 'square',
+        colorbar: { title: 'mV/m' },
+      },
+    }];
+  }, [gradients]);
+
+  // Histogram data
+  const histogramData = useMemo(() => {
+    if (!hasValidData) return [];
+    return [{
+      x: flatValues,
+      type: 'histogram' as const,
+      marker: { color: 'hsl(220, 70%, 50%)' },
+      nbinsx: 15,
+    }];
+  }, [hasValidData, flatValues]);
+
+  // Pie chart data
+  const pieData = useMemo(() => {
+    return [{
+      values: [stats.severe.count, stats.uncertain.count, stats.low.count],
+      labels: ['Alto Risco', 'Incerto', 'Baixo Risco'],
+      type: 'pie' as const,
+      marker: {
+        colors: [
+          'hsl(0, 70%, 50%)',
+          'hsl(45, 90%, 50%)',
+          'hsl(145, 60%, 45%)',
+        ],
+      },
+      textinfo: 'label+percent',
+      textfont: { color: 'white' },
+      hole: 0.4,
+    }];
+  }, [stats]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -202,29 +305,16 @@ export function PotentialMapGenerator() {
                   Mapa de Potenciais 2D
                 </h3>
                 <div className="h-[calc(100%-2rem)]" ref={plot2dRef}>
-                  <PlotlyChart
-                    data={[
-                      {
-                        z: reversedZ,
-                        x: data.xVals,
-                        y: reversedY,
-                        type: 'contour',
-                        colorscale: params.colorscale,
-                        contours: {
-                          coloring: 'heatmap',
-                          showlabels: true,
-                          labelfont: { color: 'white', size: 10 },
-                        },
-                        line: { color: isDarkMode ? '#64748b' : '#334155', width: 0.5 },
-                        colorbar: { title: 'V', tickformat: '.2f' },
-                      } as any,
-                    ]}
-                    layout={{
-                      ...plotLayout,
-                      xaxis: { title: 'Largura (m)', gridcolor: theme.grid },
-                      yaxis: { title: 'Altura (m)', scaleanchor: 'x', gridcolor: theme.grid },
-                    }}
-                  />
+                  {hasValidData && contourData.length > 0 && (
+                    <PlotlyChart
+                      data={contourData}
+                      layout={{
+                        ...plotLayout,
+                        xaxis: { title: 'Largura (m)', gridcolor: theme.grid },
+                        yaxis: { title: 'Altura (m)', scaleanchor: 'x', gridcolor: theme.grid },
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -238,27 +328,20 @@ export function PotentialMapGenerator() {
                 Topografia 3D
               </h3>
               <div className="h-[calc(100%-2rem)]" ref={plot3dRef}>
-                <PlotlyChart
-                  data={[
-                    {
-                      z: reversedZ,
-                      x: data.xVals,
-                      y: reversedY,
-                      type: 'surface',
-                      colorscale: params.colorscale,
-                      colorbar: { title: 'V' },
-                    } as any,
-                  ]}
-                  layout={{
-                    ...plotLayout,
-                    margin: { t: 10, b: 10, l: 10, r: 10 },
-                    scene: {
-                      xaxis: { title: 'X (m)', gridcolor: theme.grid },
-                      yaxis: { title: 'Y (m)', gridcolor: theme.grid },
-                      zaxis: { title: 'V', gridcolor: theme.grid },
-                    },
-                  }}
-                />
+                {hasValidData && surfaceData.length > 0 && (
+                  <PlotlyChart
+                    data={surfaceData}
+                    layout={{
+                      ...plotLayout,
+                      margin: { t: 10, b: 10, l: 10, r: 10 },
+                      scene: {
+                        xaxis: { title: 'X (m)', gridcolor: theme.grid },
+                        yaxis: { title: 'Y (m)', gridcolor: theme.grid },
+                        zaxis: { title: 'V', gridcolor: theme.grid },
+                      },
+                    }}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -272,28 +355,16 @@ export function PotentialMapGenerator() {
                   Mapa de Gradientes
                 </h3>
                 <div className="h-[calc(100%-2rem)]" ref={plotGradientRef}>
-                  <PlotlyChart
-                    data={[
-                      {
-                        x: gradients.map((g) => g.x),
-                        y: gradients.map((g) => g.y),
-                        mode: 'markers',
-                        type: 'scatter',
-                        marker: {
-                          color: gradients.map((g) => g.gradient),
-                          size: 14,
-                          colorscale: 'Hot',
-                          symbol: 'square',
-                          colorbar: { title: 'mV/m' },
-                        },
-                      } as any,
-                    ]}
-                    layout={{
-                      ...plotLayout,
-                      xaxis: { title: 'Largura (m)', gridcolor: theme.grid },
-                      yaxis: { title: 'Altura (m)', scaleanchor: 'x', gridcolor: theme.grid },
-                    }}
-                  />
+                  {gradientData.length > 0 && (
+                    <PlotlyChart
+                      data={gradientData}
+                      layout={{
+                        ...plotLayout,
+                        xaxis: { title: 'Largura (m)', gridcolor: theme.grid },
+                        yaxis: { title: 'Altura (m)', scaleanchor: 'x', gridcolor: theme.grid },
+                      }}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -327,45 +398,24 @@ export function PotentialMapGenerator() {
               <div className="grid lg:grid-cols-2 gap-6">
                 <div className="plot-container h-[350px]">
                   <div className="h-full" ref={plotHistRef}>
-                    <PlotlyChart
-                      data={[
-                        {
-                          x: flatValues,
-                          type: 'histogram',
-                          marker: { color: 'hsl(220, 70%, 50%)' },
-                          nbinsx: 15,
-                        } as any,
-                      ]}
-                      layout={{
-                        ...plotLayout,
-                        title: { text: 'Distribuição (mV)', font: { size: 14 } },
-                        xaxis: { title: 'Potencial (mV)', gridcolor: theme.grid },
-                        yaxis: { title: 'Frequência', gridcolor: theme.grid },
-                      }}
-                    />
+                    {histogramData.length > 0 && (
+                      <PlotlyChart
+                        data={histogramData}
+                        layout={{
+                          ...plotLayout,
+                          title: { text: 'Distribuição (mV)', font: { size: 14 } },
+                          xaxis: { title: 'Potencial (mV)', gridcolor: theme.grid },
+                          yaxis: { title: 'Frequência', gridcolor: theme.grid },
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
 
                 <div className="plot-container h-[350px]">
                   <div className="h-full" ref={plotPieRef}>
                     <PlotlyChart
-                      data={[
-                        {
-                          values: [stats.severe.count, stats.uncertain.count, stats.low.count],
-                          labels: ['Alto Risco', 'Incerto', 'Baixo Risco'],
-                          type: 'pie',
-                          marker: {
-                            colors: [
-                              'hsl(0, 70%, 50%)',
-                              'hsl(45, 90%, 50%)',
-                              'hsl(145, 60%, 45%)',
-                            ],
-                          },
-                          textinfo: 'label+percent',
-                          textfont: { color: 'white' },
-                          hole: 0.4,
-                        } as any,
-                      ]}
+                      data={pieData}
                       layout={{
                         ...plotLayout,
                         showlegend: false,

@@ -10,6 +10,9 @@ import {
 } from '@/types/potential';
 import { formatNumber, getASTMInterpretation } from './calculations';
 
+// @ts-ignore
+import Plotly from 'plotly.js-dist-min';
+
 export interface PDFData {
   data: PotentialData;
   stats: Statistics;
@@ -17,6 +20,41 @@ export interface PDFData {
   gradients: GradientPoint[];
   recommendations: Recommendation[];
   params: Parameters;
+}
+
+async function captureChartImage(element: HTMLElement | null): Promise<string | null> {
+  if (!element) return null;
+  
+  try {
+    // Try to use Plotly's toImage if the element has a plotly graph
+    const plotlyDiv = element.querySelector('.js-plotly-plot') as HTMLElement;
+    if (plotlyDiv) {
+      try {
+        const imgData = await Plotly.toImage(plotlyDiv, {
+          format: 'png',
+          width: 800,
+          height: 400,
+          scale: 2,
+        });
+        return imgData;
+      } catch (e) {
+        console.warn('Plotly toImage failed, falling back to html2canvas');
+      }
+    }
+    
+    // Fallback to html2canvas
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      allowTaint: true,
+    });
+    return canvas.toDataURL('image/png');
+  } catch (error) {
+    console.error('Error capturing chart:', error);
+    return null;
+  }
 }
 
 export async function generatePDF(
@@ -86,22 +124,6 @@ export async function generatePDF(
     yPos += lines.length * 5 + 2;
   };
 
-  const captureChart = async (element: HTMLElement | null): Promise<string | null> => {
-    if (!element) return null;
-    try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      });
-      return canvas.toDataURL('image/png');
-    } catch (error) {
-      console.error('Error capturing chart:', error);
-      return null;
-    }
-  };
-
   // Start PDF generation
   addHeader();
 
@@ -154,7 +176,6 @@ export async function generatePDF(
   addSectionTitle('2. ANÁLISE DE RISCO CONFORME ASTM C876');
   
   // Risk table
-  const tableStartY = yPos;
   const colWidths = [contentWidth * 0.4, contentWidth * 0.2, contentWidth * 0.2, contentWidth * 0.2];
   
   // Table header
@@ -205,20 +226,24 @@ export async function generatePDF(
   pdf.text('* Limites baseados na ASTM C876-15 para eletrodo de referência ' + pdfData.params.electrode, margin, yPos);
   yPos += 10;
 
-  // Capture and add charts
+  // Capture charts
   const [pieImg, histImg] = await Promise.all([
-    captureChart(chartRefs.plotPie),
-    captureChart(chartRefs.plotHist),
+    captureChartImage(chartRefs.plotPie),
+    captureChartImage(chartRefs.plotHist),
   ]);
 
-  if (pieImg && histImg) {
+  if (pieImg || histImg) {
     if (yPos + 50 > pageHeight - margin) {
       pdf.addPage();
       addHeader();
     }
     const chartWidth = (contentWidth - 6) / 2;
-    pdf.addImage(histImg, 'PNG', margin, yPos, chartWidth, 45);
-    pdf.addImage(pieImg, 'PNG', margin + chartWidth + 6, yPos, chartWidth, 45);
+    if (histImg) {
+      pdf.addImage(histImg, 'PNG', margin, yPos, chartWidth, 45);
+    }
+    if (pieImg) {
+      pdf.addImage(pieImg, 'PNG', margin + chartWidth + 6, yPos, chartWidth, 45);
+    }
     yPos += 50;
   }
 
@@ -270,7 +295,7 @@ export async function generatePDF(
   // 4. 2D Potential Map
   addSectionTitle('4. MAPA DE POTENCIAIS (2D)');
   
-  const map2dImg = await captureChart(chartRefs.plot2d);
+  const map2dImg = await captureChartImage(chartRefs.plot2d);
   if (map2dImg) {
     const imgHeight = 70;
     pdf.addImage(map2dImg, 'PNG', margin, yPos, contentWidth, imgHeight);
@@ -280,7 +305,7 @@ export async function generatePDF(
   // 5. 3D Surface
   addSectionTitle('5. TOPOGRAFIA (3D)');
   
-  const map3dImg = await captureChart(chartRefs.plot3d);
+  const map3dImg = await captureChartImage(chartRefs.plot3d);
   if (map3dImg) {
     const imgHeight = 65;
     pdf.addImage(map3dImg, 'PNG', margin, yPos, contentWidth, imgHeight);
@@ -290,7 +315,7 @@ export async function generatePDF(
   // 6. Gradient Map
   addSectionTitle('6. MAPA DE GRADIENTES');
   
-  const gradImg = await captureChart(chartRefs.plotGradient);
+  const gradImg = await captureChartImage(chartRefs.plotGradient);
   if (gradImg) {
     const imgHeight = 50;
     pdf.addImage(gradImg, 'PNG', margin, yPos, contentWidth, imgHeight);
