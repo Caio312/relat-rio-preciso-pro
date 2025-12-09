@@ -20,6 +20,7 @@ export interface PDFData {
   gradients: GradientPoint[];
   recommendations: Recommendation[];
   params: Parameters;
+  comments?: string;
 }
 
 async function captureChartImage(element: HTMLElement | null): Promise<string | null> {
@@ -56,6 +57,22 @@ async function captureChartImage(element: HTMLElement | null): Promise<string | 
     return null;
   }
 }
+
+const GRADIENT_EXPLANATION = `O gradiente de potencial é calculado como a variação máxima do potencial entre pontos adjacentes, dividida pela distância entre eles. A fórmula utilizada é:
+
+Gradiente = max(|ΔVx|/Δx, |ΔVy|/Δy) × 1000 [mV/m]
+
+Onde:
+• ΔVx = diferença de potencial entre pontos horizontais adjacentes
+• ΔVy = diferença de potencial entre pontos verticais adjacentes  
+• Δx, Δy = espaçamento entre pontos de medição
+
+Interpretação (ASTM C876):
+• Gradientes > 150 mV/m: Indicam formação de macrocélulas de corrosão ativas
+• Gradientes > 100 mV/m: Requerem atenção - possível atividade de corrosão localizada
+• Gradientes < 50 mV/m: Condições relativamente uniformes
+
+Gradientes elevados em regiões com potenciais negativos indicam zonas anódicas ativas onde a corrosão está progredindo.`;
 
 export async function generatePDF(
   pdfData: PDFData,
@@ -297,23 +314,34 @@ export async function generatePDF(
   
   const map2dImg = await captureChartImage(chartRefs.plot2d);
   if (map2dImg) {
-    const imgHeight = 70;
+    const imgHeight = 65;
     pdf.addImage(map2dImg, 'PNG', margin, yPos, contentWidth, imgHeight);
     yPos += imgHeight + 5;
   }
 
-  // 5. 3D Surface
-  addSectionTitle('5. TOPOGRAFIA (3D)');
+  // 5. 3D Surface (Isometric View)
+  addSectionTitle('5. TOPOGRAFIA 3D (VISTA ISOMÉTRICA)');
   
   const map3dImg = await captureChartImage(chartRefs.plot3d);
   if (map3dImg) {
-    const imgHeight = 65;
+    const imgHeight = 60;
     pdf.addImage(map3dImg, 'PNG', margin, yPos, contentWidth, imgHeight);
-    yPos += imgHeight + 5;
+    yPos += imgHeight + 3;
+    
+    // Add 3D description
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Vista isométrica da superfície de potenciais. Valores mais negativos (vales) indicam maior probabilidade de corrosão.', margin, yPos);
+    yPos += 8;
   }
 
-  // 6. Gradient Map
-  addSectionTitle('6. MAPA DE GRADIENTES');
+  // New page for gradients
+  pdf.addPage();
+  addHeader();
+
+  // 6. Gradient Map with explanation
+  addSectionTitle('6. MAPA DE GRADIENTES DE POTENCIAL');
   
   const gradImg = await captureChartImage(chartRefs.plotGradient);
   if (gradImg) {
@@ -322,24 +350,55 @@ export async function generatePDF(
     yPos += imgHeight + 5;
   }
 
-  // Gradient analysis
+  // Gradient statistics
   const maxGrad = pdfData.gradients.length ? Math.max(...pdfData.gradients.map(g => g.gradient)) : 0;
+  const avgGrad = pdfData.gradients.length ? pdfData.gradients.reduce((a, b) => a + b.gradient, 0) / pdfData.gradients.length : 0;
   const criticalCount = pdfData.gradients.filter(g => g.gradient > 100).length;
+  
+  pdf.setFillColor(249, 249, 249);
+  pdf.rect(margin, yPos, contentWidth, 18, 'F');
+  pdf.setDrawColor(200, 200, 200);
+  pdf.rect(margin, yPos, contentWidth, 18, 'S');
+  
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(51, 51, 51);
+  pdf.text('Estatísticas de Gradientes:', margin + 3, yPos + 5);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`Gradiente Máximo: ${maxGrad.toFixed(0)} mV/m`, margin + 3, yPos + 11);
+  pdf.text(`Gradiente Médio: ${avgGrad.toFixed(0)} mV/m`, margin + 70, yPos + 11);
+  pdf.text(`Pontos Críticos (>100 mV/m): ${criticalCount}`, margin + 3, yPos + 16);
+  yPos += 23;
+
+  // Gradient calculation explanation
+  addSectionTitle('6.1 METODOLOGIA DE CÁLCULO DOS GRADIENTES');
   
   pdf.setFontSize(9);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(51, 51, 51);
-  pdf.text(`Gradiente máximo: ${maxGrad.toFixed(0)} mV/m | Pontos críticos (>100 mV/m): ${criticalCount}`, margin, yPos);
-  yPos += 8;
+  
+  const explanationLines = pdf.splitTextToSize(GRADIENT_EXPLANATION, contentWidth);
+  explanationLines.forEach((line: string) => {
+    if (yPos > pageHeight - 15) {
+      pdf.addPage();
+      addHeader();
+    }
+    pdf.text(line, margin, yPos);
+    yPos += 4.5;
+  });
+  
+  yPos += 5;
 
-  // New page for uncertain points
+  // 7. Uncertain Points Table
   if (pdfData.uncertainPoints.length > 0) {
-    pdf.addPage();
-    addHeader();
+    if (yPos > pageHeight - 60) {
+      pdf.addPage();
+      addHeader();
+    }
 
     addSectionTitle('7. PONTOS EM ZONA DE INCERTEZA');
     
-    addText('Lista de pontos medidos na zona de transição (entre limites alto e baixo risco). Estes pontos requerem atenção especial e possivelmente medições complementares.', 9);
+    addText('Lista de pontos na zona de transição que requerem atenção especial.', 9);
     yPos += 3;
 
     // Uncertain points table
@@ -355,7 +414,7 @@ export async function generatePDF(
     pdf.text('Potencial (mV)', margin + tableColWidths[0] + tableColWidths[1] + 3, yPos + 4);
     yPos += 6;
 
-    pdfData.uncertainPoints.slice(0, 40).forEach((pt, i) => {
+    pdfData.uncertainPoints.slice(0, 25).forEach((pt, i) => {
       if (yPos + 6 > pageHeight - margin) {
         pdf.addPage();
         addHeader();
@@ -379,20 +438,59 @@ export async function generatePDF(
       yPos += 5;
     });
 
-    if (pdfData.uncertainPoints.length > 40) {
+    if (pdfData.uncertainPoints.length > 25) {
       pdf.setTextColor(100, 100, 100);
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(8);
-      pdf.text(`... e mais ${pdfData.uncertainPoints.length - 40} pontos não listados`, margin, yPos + 5);
+      pdf.text(`... e mais ${pdfData.uncertainPoints.length - 25} pontos não listados`, margin, yPos + 5);
+      yPos += 10;
     }
   }
+
+  // 8. Comments Section
+  pdf.addPage();
+  addHeader();
+  
+  addSectionTitle('8. OBSERVAÇÕES E COMENTÁRIOS');
+  
+  // Comments box
+  pdf.setFillColor(255, 255, 255);
+  pdf.setDrawColor(200, 200, 200);
+  pdf.rect(margin, yPos, contentWidth, 80, 'S');
+  
+  if (pdfData.comments && pdfData.comments.trim()) {
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(51, 51, 51);
+    const commentLines = pdf.splitTextToSize(pdfData.comments, contentWidth - 6);
+    pdf.text(commentLines, margin + 3, yPos + 6);
+  } else {
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setTextColor(150, 150, 150);
+    pdf.text('Espaço reservado para observações do inspetor.', margin + 3, yPos + 6);
+  }
+  yPos += 85;
+
+  // Signature section
+  addSectionTitle('9. RESPONSÁVEL TÉCNICO');
+  
+  pdf.setDrawColor(100, 100, 100);
+  pdf.line(margin, yPos + 20, margin + 70, yPos + 20);
+  pdf.line(margin + contentWidth - 70, yPos + 20, margin + contentWidth, yPos + 20);
+  
+  pdf.setFontSize(8);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(100, 100, 100);
+  pdf.text('Assinatura do Responsável', margin, yPos + 25);
+  pdf.text('Data', margin + contentWidth - 70, yPos + 25);
 
   // Footer on last page
   pdf.setFontSize(7);
   pdf.setFont('helvetica', 'italic');
   pdf.setTextColor(150, 150, 150);
   pdf.text(
-    'Relatório gerado automaticamente conforme ASTM C876-15: Standard Test Method for Corrosion Potentials of Uncoated Reinforcing Steel in Concrete',
+    'Relatório gerado conforme ASTM C876-15: Standard Test Method for Corrosion Potentials of Uncoated Reinforcing Steel in Concrete',
     margin,
     pageHeight - 8
   );
@@ -400,3 +498,5 @@ export async function generatePDF(
   // Save the PDF
   pdf.save(`Relatorio_ASTM_C876_${date.replace(/\//g, '-')}.pdf`);
 }
+
+export { GRADIENT_EXPLANATION };

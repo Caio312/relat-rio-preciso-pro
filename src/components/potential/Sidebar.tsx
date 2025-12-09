@@ -9,6 +9,7 @@ import {
   Moon,
   Sun,
   Map,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,9 +35,11 @@ interface SidebarProps {
   onImportCSV: (content: string) => void;
   onExportCSV: () => void;
   onGeneratePDF: () => void;
+  onGenerateWord: () => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
   isGeneratingPDF: boolean;
+  isGeneratingWord: boolean;
 }
 
 export function Sidebar({
@@ -51,9 +54,11 @@ export function Sidebar({
   onImportCSV,
   onExportCSV,
   onGeneratePDF,
+  onGenerateWord,
   isDarkMode,
   onToggleDarkMode,
   isGeneratingPDF,
+  isGeneratingWord,
 }: SidebarProps) {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -120,12 +125,22 @@ export function Sidebar({
 
           <Button
             variant="secondary"
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white mb-3"
             onClick={onGeneratePDF}
             disabled={isGeneratingPDF}
           >
             <FileText className="w-4 h-4 mr-2" />
             {isGeneratingPDF ? 'Gerando...' : 'Relatório PDF'}
+          </Button>
+
+          <Button
+            variant="secondary"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={onGenerateWord}
+            disabled={isGeneratingWord}
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            {isGeneratingWord ? 'Gerando...' : 'Relatório Word'}
           </Button>
         </div>
 
