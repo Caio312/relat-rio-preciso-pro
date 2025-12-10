@@ -1,6 +1,8 @@
-import { FileText, AlertTriangle, CheckCircle, Info, XCircle, TrendingUp, MessageSquare } from 'lucide-react';
-import { Statistics, UncertainPoint, GradientPoint, Recommendation, Parameters } from '@/types/potential';
+import { FileText, AlertTriangle, CheckCircle, Info, XCircle, TrendingUp, MessageSquare, MapPin, Calendar, User, Camera } from 'lucide-react';
+import { Statistics, UncertainPoint, GradientPoint, Recommendation, Parameters, InspectionInfo, AttachedPhoto, PotentialData } from '@/types/potential';
 import { formatNumber, getASTMInterpretation } from '@/utils/calculations';
+import { PlotlyChart } from './PlotlyChart';
+import { useMemo } from 'react';
 
 interface PDFPreviewProps {
   stats: Statistics;
@@ -9,23 +11,128 @@ interface PDFPreviewProps {
   recommendations: Recommendation[];
   params: Parameters;
   comments: string;
+  inspectionInfo: InspectionInfo;
+  photos: AttachedPhoto[];
+  data: PotentialData;
 }
 
-export function PDFPreview({ stats, uncertainPoints, gradients, recommendations, params, comments }: PDFPreviewProps) {
-  const date = new Date().toLocaleDateString('pt-BR');
-  const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+export function PDFPreview({ 
+  stats, 
+  uncertainPoints, 
+  gradients, 
+  recommendations, 
+  params, 
+  comments, 
+  inspectionInfo, 
+  photos,
+  data 
+}: PDFPreviewProps) {
   const interpretation = getASTMInterpretation(stats, params.electrode);
   
   const maxGrad = gradients.length ? Math.max(...gradients.map(g => g.gradient)) : 0;
   const avgGrad = gradients.length ? gradients.reduce((a, b) => a + b.gradient, 0) / gradients.length : 0;
   const criticalCount = gradients.filter(g => g.gradient > 100).length;
+
+  const formattedDate = inspectionInfo.date 
+    ? new Date(inspectionInfo.date + 'T00:00:00').toLocaleDateString('pt-BR')
+    : new Date().toLocaleDateString('pt-BR');
+
+  // Prepare chart data
+  const hasValidData = data && data.matrix && data.matrix.length > 0 && data.xVals && data.xVals.length > 0;
+  
+  const reversedZ = useMemo(() => {
+    if (!hasValidData) return [[0]];
+    return [...data.matrix].reverse();
+  }, [data.matrix, hasValidData]);
+
+  const reversedY = useMemo(() => {
+    if (!hasValidData) return [0];
+    return [...data.yVals].reverse();
+  }, [data.yVals, hasValidData]);
+
+  const flatValues = useMemo(() => {
+    if (!hasValidData) return [0];
+    return data.matrix.flat().map((v) => v * 1000);
+  }, [data.matrix, hasValidData]);
+
+  const contourData = useMemo(() => {
+    if (!hasValidData) return [];
+    return [{
+      z: reversedZ,
+      x: data.xVals,
+      y: reversedY,
+      type: 'contour' as const,
+      colorscale: params.colorscale,
+      contours: { coloring: 'heatmap', showlabels: true, labelfont: { color: 'white', size: 8 } },
+      line: { color: '#334155', width: 0.5 },
+      colorbar: { title: 'V', tickformat: '.2f' },
+    }];
+  }, [hasValidData, reversedZ, data.xVals, reversedY, params.colorscale]);
+
+  const surfaceData = useMemo(() => {
+    if (!hasValidData) return [];
+    return [{
+      z: reversedZ,
+      x: data.xVals,
+      y: reversedY,
+      type: 'surface' as const,
+      colorscale: params.colorscale,
+      colorbar: { title: 'V' },
+    }];
+  }, [hasValidData, reversedZ, data.xVals, reversedY, params.colorscale]);
+
+  const gradientData = useMemo(() => {
+    if (gradients.length === 0) return [];
+    return [{
+      x: gradients.map((g) => g.x),
+      y: gradients.map((g) => g.y),
+      mode: 'markers' as const,
+      type: 'scatter' as const,
+      marker: {
+        color: gradients.map((g) => g.gradient),
+        size: 10,
+        colorscale: 'Hot',
+        symbol: 'square',
+        colorbar: { title: 'mV/m' },
+      },
+    }];
+  }, [gradients]);
+
+  const histogramData = useMemo(() => {
+    if (!hasValidData) return [];
+    return [{
+      x: flatValues,
+      type: 'histogram' as const,
+      marker: { color: 'hsl(220, 70%, 50%)' },
+      nbinsx: 15,
+    }];
+  }, [hasValidData, flatValues]);
+
+  const pieData = useMemo(() => {
+    return [{
+      values: [stats.severe.count, stats.uncertain.count, stats.low.count],
+      labels: ['Alto Risco', 'Incerto', 'Baixo Risco'],
+      type: 'pie' as const,
+      marker: { colors: ['hsl(0, 70%, 50%)', 'hsl(45, 90%, 50%)', 'hsl(145, 60%, 45%)'] },
+      textinfo: 'label+percent',
+      textfont: { color: 'white' },
+      hole: 0.4,
+    }];
+  }, [stats]);
+
+  const previewLayout = {
+    paper_bgcolor: '#ffffff',
+    plot_bgcolor: '#ffffff',
+    font: { color: '#1e293b', family: 'IBM Plex Sans', size: 10 },
+    margin: { t: 20, b: 40, l: 50, r: 20 },
+  };
   
   const getRecIcon = (type: string) => {
     switch (type) {
-      case 'urgent': return <XCircle className="w-4 h-4 text-risk-severe" />;
-      case 'warning': return <AlertTriangle className="w-4 h-4 text-risk-uncertain" />;
-      case 'success': return <CheckCircle className="w-4 h-4 text-risk-low" />;
-      default: return <Info className="w-4 h-4 text-primary" />;
+      case 'urgent': return <XCircle className="w-4 h-4 text-red-500" />;
+      case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+      case 'success': return <CheckCircle className="w-4 h-4 text-green-500" />;
+      default: return <Info className="w-4 h-4 text-blue-500" />;
     }
   };
 
@@ -37,15 +144,51 @@ export function PDFPreview({ stats, uncertainPoints, gradients, recommendations,
       </div>
 
       {/* Preview Container */}
-      <div className="bg-white text-gray-800 rounded-lg shadow-lg overflow-hidden max-h-[70vh] overflow-y-auto">
+      <div className="bg-white text-gray-800 rounded-lg shadow-lg overflow-hidden max-h-[75vh] overflow-y-auto">
         {/* Header */}
         <div className="bg-slate-800 text-white p-4">
           <h1 className="text-lg font-bold">RELATÓRIO DE MAPEAMENTO DE POTENCIAL</h1>
           <p className="text-sm text-slate-300">Avaliação de Corrosão em Armaduras - ASTM C876</p>
-          <p className="text-xs text-slate-400 mt-1">Data: {date} às {time} | Ref: {params.electrode}</p>
+          <div className="flex flex-wrap gap-4 mt-2 text-xs text-slate-400">
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3 h-3" />
+              Data: {formattedDate}
+            </span>
+            {inspectionInfo.location && (
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {inspectionInfo.location}
+              </span>
+            )}
+            <span>Ref: {params.electrode}</span>
+          </div>
         </div>
 
         <div className="p-4 space-y-6">
+          {/* Inspection Info */}
+          {(inspectionInfo.responsibleName || inspectionInfo.crea || inspectionInfo.art) && (
+            <section className="bg-slate-50 p-3 rounded border">
+              <h3 className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1">
+                <User className="w-3 h-3" />
+                Responsável Técnico
+              </h3>
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                {inspectionInfo.responsibleName && (
+                  <p><span className="font-medium">Nome:</span> {inspectionInfo.responsibleName}</p>
+                )}
+                {inspectionInfo.responsibleRole && (
+                  <p><span className="font-medium">Função:</span> {inspectionInfo.responsibleRole}</p>
+                )}
+                {inspectionInfo.crea && (
+                  <p><span className="font-medium">CREA:</span> {inspectionInfo.crea}</p>
+                )}
+                {inspectionInfo.art && (
+                  <p><span className="font-medium">ART:</span> {inspectionInfo.art}</p>
+                )}
+              </div>
+            </section>
+          )}
+
           {/* 1. Executive Summary */}
           <section>
             <h2 className="bg-slate-700 text-white px-3 py-2 text-sm font-bold rounded">1. RESUMO EXECUTIVO</h2>
@@ -113,9 +256,34 @@ export function PDFPreview({ stats, uncertainPoints, gradients, recommendations,
                 </tr>
               </tbody>
             </table>
-            <p className="text-[10px] text-gray-500 mt-2 italic">
-              * Limites baseados na ASTM C876-15 para eletrodo de referência {params.electrode}
-            </p>
+          </section>
+
+          {/* Charts - Distribution and Pie */}
+          <section>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="h-48 border rounded">
+                {histogramData.length > 0 && (
+                  <PlotlyChart
+                    data={histogramData}
+                    layout={{
+                      ...previewLayout,
+                      title: { text: 'Distribuição (mV)', font: { size: 11 } },
+                      xaxis: { title: 'Potencial (mV)' },
+                      yaxis: { title: 'Frequência' },
+                    }}
+                  />
+                )}
+              </div>
+              <div className="h-48 border rounded">
+                <PlotlyChart
+                  data={pieData}
+                  layout={{
+                    ...previewLayout,
+                    showlegend: false,
+                  }}
+                />
+              </div>
+            </div>
           </section>
 
           {/* 3. Recommendations */}
@@ -134,33 +302,66 @@ export function PDFPreview({ stats, uncertainPoints, gradients, recommendations,
                   <div>
                     <p className="text-xs font-bold">{rec.title}</p>
                     <p className="text-[10px] text-gray-600">{rec.description}</p>
-                    {rec.astmRef && <p className="text-[10px] text-gray-400 italic mt-1">Ref: {rec.astmRef}</p>}
                   </div>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* Charts placeholder */}
+          {/* 4. 2D Map */}
           <section>
             <h2 className="bg-slate-700 text-white px-3 py-2 text-sm font-bold rounded">4. MAPA DE POTENCIAIS (2D)</h2>
-            <div className="mt-3 h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded flex items-center justify-center">
-              <p className="text-xs text-gray-500">[Gráfico 2D será incluído no PDF]</p>
+            <div className="mt-3 h-56 border rounded">
+              {contourData.length > 0 && (
+                <PlotlyChart
+                  data={contourData}
+                  layout={{
+                    ...previewLayout,
+                    xaxis: { title: 'Largura (m)' },
+                    yaxis: { title: 'Altura (m)', scaleanchor: 'x' },
+                  }}
+                />
+              )}
             </div>
           </section>
 
+          {/* 5. 3D Surface */}
           <section>
             <h2 className="bg-slate-700 text-white px-3 py-2 text-sm font-bold rounded">5. TOPOGRAFIA 3D (VISTA ISOMÉTRICA)</h2>
-            <div className="mt-3 h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded flex items-center justify-center">
-              <p className="text-xs text-gray-500">[Gráfico 3D será incluído no PDF]</p>
+            <div className="mt-3 h-56 border rounded">
+              {surfaceData.length > 0 && (
+                <PlotlyChart
+                  data={surfaceData}
+                  layout={{
+                    ...previewLayout,
+                    margin: { t: 10, b: 10, l: 10, r: 10 },
+                    scene: {
+                      xaxis: { title: 'X (m)' },
+                      yaxis: { title: 'Y (m)' },
+                      zaxis: { title: 'V' },
+                      aspectmode: 'manual',
+                      aspectratio: { x: 1, y: 1.5, z: 0.5 },
+                    },
+                  }}
+                />
+              )}
             </div>
           </section>
 
           {/* 6. Gradients */}
           <section>
             <h2 className="bg-slate-700 text-white px-3 py-2 text-sm font-bold rounded">6. MAPA DE GRADIENTES DE POTENCIAL</h2>
-            <div className="mt-3 h-24 bg-gray-100 border-2 border-dashed border-gray-300 rounded flex items-center justify-center">
-              <p className="text-xs text-gray-500">[Mapa de gradientes será incluído no PDF]</p>
+            <div className="mt-3 h-48 border rounded">
+              {gradientData.length > 0 && (
+                <PlotlyChart
+                  data={gradientData}
+                  layout={{
+                    ...previewLayout,
+                    xaxis: { title: 'Largura (m)' },
+                    yaxis: { title: 'Altura (m)', scaleanchor: 'x' },
+                  }}
+                />
+              )}
             </div>
             
             <div className="grid grid-cols-3 gap-2 mt-3">
@@ -177,20 +378,9 @@ export function PDFPreview({ stats, uncertainPoints, gradients, recommendations,
                 <p className="text-sm font-bold">{criticalCount}</p>
               </div>
             </div>
-
-            <div className="mt-3">
-              <h3 className="bg-slate-600 text-white px-2 py-1 text-xs font-bold rounded">6.1 METODOLOGIA DE CÁLCULO</h3>
-              <div className="mt-2 text-[10px] text-gray-700 bg-gray-50 p-2 rounded border">
-                <p>O gradiente de potencial é calculado como a variação máxima do potencial entre pontos adjacentes, dividida pela distância entre eles.</p>
-                <p className="mt-1 font-mono">Gradiente = max(|ΔVx|/Δx, |ΔVy|/Δy) × 1000 [mV/m]</p>
-                <p className="mt-1">• Gradientes &gt;150 mV/m: Macrocélulas de corrosão ativas</p>
-                <p>• Gradientes &gt;100 mV/m: Possível atividade localizada</p>
-                <p>• Gradientes &lt;50 mV/m: Condições uniformes</p>
-              </div>
-            </div>
           </section>
 
-          {/* 6.2 Gradient Points Table */}
+          {/* Gradient Points Table */}
           {gradients.length > 0 && (
             <section>
               <h3 className="bg-slate-600 text-white px-2 py-1 text-xs font-bold rounded flex items-center gap-2">
@@ -233,11 +423,6 @@ export function PDFPreview({ stats, uncertainPoints, gradients, recommendations,
                   })}
                 </tbody>
               </table>
-              {gradients.length > 10 && (
-                <p className="text-[9px] text-gray-500 mt-1 italic">
-                  ... e mais {gradients.length - 10} pontos não exibidos
-                </p>
-              )}
             </section>
           )}
 
@@ -263,11 +448,6 @@ export function PDFPreview({ stats, uncertainPoints, gradients, recommendations,
                   ))}
                 </tbody>
               </table>
-              {uncertainPoints.length > 10 && (
-                <p className="text-[9px] text-gray-500 mt-1 italic">
-                  ... e mais {uncertainPoints.length - 10} pontos não listados
-                </p>
-              )}
             </section>
           )}
 
@@ -277,7 +457,7 @@ export function PDFPreview({ stats, uncertainPoints, gradients, recommendations,
               <MessageSquare className="w-4 h-4" />
               8. OBSERVAÇÕES E COMENTÁRIOS
             </h2>
-            <div className="mt-3 border rounded p-3 min-h-[80px] bg-gray-50">
+            <div className="mt-3 border rounded p-3 min-h-[60px] bg-gray-50">
               {comments.trim() ? (
                 <p className="text-xs text-gray-700 whitespace-pre-wrap">{comments}</p>
               ) : (
@@ -286,13 +466,48 @@ export function PDFPreview({ stats, uncertainPoints, gradients, recommendations,
             </div>
           </section>
 
-          {/* 9. Signature */}
+          {/* 9. Photos */}
+          {photos.length > 0 && (
+            <section>
+              <h2 className="bg-slate-700 text-white px-3 py-2 text-sm font-bold rounded flex items-center gap-2">
+                <Camera className="w-4 h-4" />
+                ANEXO: REGISTRO FOTOGRÁFICO
+              </h2>
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                {photos.map((photo, i) => (
+                  <div key={photo.id} className="border rounded overflow-hidden">
+                    <img
+                      src={photo.dataUrl}
+                      alt={photo.name}
+                      className="w-full h-32 object-cover"
+                    />
+                    <div className="p-2 bg-gray-50">
+                      <p className="text-[10px] font-medium">Foto {i + 1}</p>
+                      {photo.description && (
+                        <p className="text-[9px] text-gray-600">{photo.description}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 9/10. Signature */}
           <section>
-            <h2 className="bg-slate-700 text-white px-3 py-2 text-sm font-bold rounded">9. RESPONSÁVEL TÉCNICO</h2>
+            <h2 className="bg-slate-700 text-white px-3 py-2 text-sm font-bold rounded">
+              {photos.length > 0 ? '10' : '9'}. RESPONSÁVEL TÉCNICO
+            </h2>
             <div className="mt-4 flex justify-between px-8">
               <div className="text-center">
                 <div className="border-b border-gray-400 w-48 mb-1"></div>
                 <p className="text-[10px] text-gray-500">Assinatura do Responsável</p>
+                {inspectionInfo.responsibleName && (
+                  <p className="text-[9px] text-gray-700 mt-1">{inspectionInfo.responsibleName}</p>
+                )}
+                {inspectionInfo.crea && (
+                  <p className="text-[9px] text-gray-500">{inspectionInfo.crea}</p>
+                )}
               </div>
               <div className="text-center">
                 <div className="border-b border-gray-400 w-32 mb-1"></div>

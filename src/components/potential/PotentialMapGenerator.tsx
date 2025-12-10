@@ -9,11 +9,14 @@ import { UncertainPointsTable } from './UncertainPointsTable';
 import { GradientPointsTable } from './GradientPointsTable';
 import { RecommendationsList } from './RecommendationsList';
 import { CommentsSection } from './CommentsSection';
+import { InspectionInfoForm } from './InspectionInfoForm';
+import { PhotoUpload } from './PhotoUpload';
 import { PDFPreview } from './PDFPreview';
 import { usePotentialData } from '@/hooks/usePotentialData';
 import { generatePDF } from '@/utils/pdfGenerator';
 import { generateWord } from '@/utils/wordGenerator';
 import { toast } from 'sonner';
+import { InspectionInfo, AttachedPhoto, DEFAULT_INSPECTION_INFO } from '@/types/potential';
 
 type TabType = 'editor' | '3d' | 'gradient' | 'stats' | 'preview';
 
@@ -23,6 +26,8 @@ export function PotentialMapGenerator() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isGeneratingWord, setIsGeneratingWord] = useState(false);
   const [comments, setComments] = useState('');
+  const [inspectionInfo, setInspectionInfo] = useState<InspectionInfo>(DEFAULT_INSPECTION_INFO);
+  const [photos, setPhotos] = useState<AttachedPhoto[]>([]);
   const [xInput, setXInput] = useState('0,00; 0,15; 0,30');
   const [yInput, setYInput] = useState(
     '1,94; 1,84; 1,74; 1,64; 1,54; 1,44; 1,34; 1,24; 1,14; 1,04; 0,94; 0,84; 0,74; 0,64; 0,54'
@@ -481,7 +486,12 @@ export function PotentialMapGenerator() {
 
               <RecommendationsList recommendations={recommendations} />
               
-              <CommentsSection comments={comments} onChange={setComments} />
+              <div className="grid lg:grid-cols-2 gap-6">
+                <InspectionInfoForm info={inspectionInfo} onChange={setInspectionInfo} />
+                <CommentsSection comments={comments} onChange={setComments} />
+              </div>
+              
+              <PhotoUpload photos={photos} onChange={setPhotos} />
             </div>
           )}
 
@@ -494,6 +504,9 @@ export function PotentialMapGenerator() {
               recommendations={recommendations}
               params={params}
               comments={comments}
+              inspectionInfo={inspectionInfo}
+              photos={photos}
+              data={data}
             />
           )}
         </div>

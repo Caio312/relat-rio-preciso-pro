@@ -50,6 +50,22 @@ export interface Parameters {
   colorscale: string;
 }
 
+export interface InspectionInfo {
+  date: string;
+  location: string;
+  responsibleName: string;
+  responsibleRole: string;
+  art: string;
+  crea: string;
+}
+
+export interface AttachedPhoto {
+  id: string;
+  name: string;
+  dataUrl: string;
+  description: string;
+}
+
 export const ELECTRODE_REFERENCES: Record<string, ElectrodeReference> = {
   CSE: {
     name: 'CSE',
@@ -99,3 +115,12 @@ export const DEFAULT_DATA: number[][] = [
 
 export const DEFAULT_X = [0, 0.15, 0.30];
 export const DEFAULT_Y = [1.94, 1.84, 1.74, 1.64, 1.54, 1.44, 1.34, 1.24, 1.14, 1.04, 0.94, 0.84, 0.74, 0.64, 0.54];
+
+export const DEFAULT_INSPECTION_INFO: InspectionInfo = {
+  date: new Date().toISOString().split('T')[0],
+  location: '',
+  responsibleName: '',
+  responsibleRole: '',
+  art: '',
+  crea: '',
+};
