@@ -21,6 +21,8 @@ import {
   GradientPoint,
   Recommendation,
   Parameters,
+  InspectionInfo,
+  AttachedPhoto,
 } from '@/types/potential';
 import { formatNumber, getASTMInterpretation } from './calculations';
 import { GRADIENT_EXPLANATION } from './pdfGenerator';
@@ -36,6 +38,8 @@ export interface WordData {
   recommendations: Recommendation[];
   params: Parameters;
   comments?: string;
+  inspectionInfo?: InspectionInfo;
+  photos?: AttachedPhoto[];
 }
 
 async function captureChartAsBase64(element: HTMLElement | null): Promise<string | null> {
@@ -144,7 +148,9 @@ export async function generateWord(
     plotGradient: HTMLElement | null;
   }
 ): Promise<void> {
-  const date = new Date().toLocaleDateString('pt-BR');
+  const inspectionDate = wordData.inspectionInfo?.date 
+    ? new Date(wordData.inspectionInfo.date + 'T00:00:00').toLocaleDateString('pt-BR')
+    : new Date().toLocaleDateString('pt-BR');
   const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const interpretation = getASTMInterpretation(wordData.stats, wordData.params.electrode);
 
@@ -190,7 +196,7 @@ export async function generateWord(
     new Paragraph({
       children: [
         new TextRun({
-          text: `Data: ${date} às ${time} | Eletrodo: ${wordData.params.electrode}`,
+          text: `Data: ${inspectionDate} às ${time} | Eletrodo: ${wordData.params.electrode}`,
           size: 20,
           color: '95A5A6',
         }),
@@ -473,5 +479,5 @@ export async function generateWord(
   });
 
   const blob = await Packer.toBlob(doc);
-  saveAs(blob, `Relatorio_ASTM_C876_${date.replace(/\//g, '-')}.docx`);
+  saveAs(blob, `Relatorio_ASTM_C876_${inspectionDate.replace(/\//g, '-')}.docx`);
 }

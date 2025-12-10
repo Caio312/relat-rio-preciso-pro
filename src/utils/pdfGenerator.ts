@@ -7,6 +7,8 @@ import {
   GradientPoint,
   Recommendation,
   Parameters,
+  InspectionInfo,
+  AttachedPhoto,
 } from '@/types/potential';
 import { formatNumber, getASTMInterpretation } from './calculations';
 
@@ -21,6 +23,8 @@ export interface PDFData {
   recommendations: Recommendation[];
   params: Parameters;
   comments?: string;
+  inspectionInfo?: InspectionInfo;
+  photos?: AttachedPhoto[];
 }
 
 async function captureChartImage(element: HTMLElement | null): Promise<string | null> {
@@ -91,7 +95,9 @@ export async function generatePDF(
   const contentWidth = pageWidth - 2 * margin;
   let yPos = margin;
 
-  const date = new Date().toLocaleDateString('pt-BR');
+  const inspectionDate = pdfData.inspectionInfo?.date 
+    ? new Date(pdfData.inspectionInfo.date + 'T00:00:00').toLocaleDateString('pt-BR')
+    : new Date().toLocaleDateString('pt-BR');
   const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
   // Helper functions
@@ -108,7 +114,7 @@ export async function generatePDF(
     
     pdf.setTextColor(200, 200, 200);
     pdf.setFontSize(9);
-    pdf.text(`Data: ${date} às ${time}`, pageWidth - margin - 35, 12);
+    pdf.text(`Data: ${inspectionDate}`, pageWidth - margin - 35, 12);
     pdf.text(`Ref: ${pdfData.params.electrode}`, pageWidth - margin - 35, 19);
     yPos = 35;
   };
@@ -143,6 +149,44 @@ export async function generatePDF(
 
   // Start PDF generation
   addHeader();
+
+  // Inspection Info (if provided)
+  if (pdfData.inspectionInfo && (pdfData.inspectionInfo.location || pdfData.inspectionInfo.responsibleName)) {
+    pdf.setFillColor(240, 248, 255);
+    pdf.rect(margin, yPos, contentWidth, 22, 'F');
+    pdf.setDrawColor(52, 152, 219);
+    pdf.rect(margin, yPos, contentWidth, 22, 'S');
+    
+    pdf.setFontSize(9);
+    pdf.setTextColor(51, 51, 51);
+    
+    if (pdfData.inspectionInfo.location) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Local: ', margin + 3, yPos + 6);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(pdfData.inspectionInfo.location, margin + 15, yPos + 6);
+    }
+    
+    if (pdfData.inspectionInfo.responsibleName) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Responsável: ', margin + 3, yPos + 12);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`${pdfData.inspectionInfo.responsibleName}${pdfData.inspectionInfo.responsibleRole ? ` - ${pdfData.inspectionInfo.responsibleRole}` : ''}`, margin + 26, yPos + 12);
+    }
+    
+    if (pdfData.inspectionInfo.crea || pdfData.inspectionInfo.art) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('CREA: ', margin + 3, yPos + 18);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(pdfData.inspectionInfo.crea || '-', margin + 15, yPos + 18);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('ART: ', margin + 60, yPos + 18);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(pdfData.inspectionInfo.art || '-', margin + 70, yPos + 18);
+    }
+    
+    yPos += 27;
+  }
 
   // 1. Executive Summary
   addSectionTitle('1. RESUMO EXECUTIVO');
@@ -557,6 +601,57 @@ export async function generatePDF(
   pdf.setTextColor(100, 100, 100);
   pdf.text('Assinatura do Responsável', margin, yPos + 25);
   pdf.text('Data', margin + contentWidth - 70, yPos + 25);
+  
+  if (pdfData.inspectionInfo?.responsibleName) {
+    pdf.setFontSize(9);
+    pdf.setTextColor(51, 51, 51);
+    pdf.text(pdfData.inspectionInfo.responsibleName, margin, yPos + 30);
+    if (pdfData.inspectionInfo.crea) {
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(pdfData.inspectionInfo.crea, margin, yPos + 35);
+    }
+  }
+  
+  yPos += 45;
+
+  // 10. Photos Section (if any)
+  if (pdfData.photos && pdfData.photos.length > 0) {
+    pdf.addPage();
+    addHeader();
+    
+    addSectionTitle('ANEXO: REGISTRO FOTOGRÁFICO');
+    
+    for (let i = 0; i < pdfData.photos.length; i++) {
+      const photo = pdfData.photos[i];
+      
+      if (yPos + 80 > pageHeight - margin) {
+        pdf.addPage();
+        addHeader();
+      }
+      
+      try {
+        const imgData = photo.dataUrl;
+        pdf.addImage(imgData, 'JPEG', margin, yPos, 80, 60);
+        
+        pdf.setFontSize(9);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(51, 51, 51);
+        pdf.text(`Foto ${i + 1}`, margin + 85, yPos + 5);
+        
+        if (photo.description) {
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8);
+          const descLines = pdf.splitTextToSize(photo.description, contentWidth - 90);
+          pdf.text(descLines, margin + 85, yPos + 12);
+        }
+        
+        yPos += 65;
+      } catch (e) {
+        console.error('Error adding photo to PDF:', e);
+      }
+    }
+  }
 
   // Footer on last page
   pdf.setFontSize(7);
@@ -569,7 +664,7 @@ export async function generatePDF(
   );
 
   // Save the PDF
-  pdf.save(`Relatorio_ASTM_C876_${date.replace(/\//g, '-')}.pdf`);
+  pdf.save(`Relatorio_ASTM_C876_${inspectionDate.replace(/\//g, '-')}.pdf`);
 }
 
 export { GRADIENT_EXPLANATION };
