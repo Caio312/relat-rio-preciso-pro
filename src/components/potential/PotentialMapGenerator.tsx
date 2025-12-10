@@ -1,18 +1,21 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
-import { Table, Box, AreaChart, PieChart, Loader2 } from 'lucide-react';
+import { Table, Box, AreaChart, PieChart, Loader2, Eye } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { DataTable } from './DataTable';
 import { PlotlyChart } from './PlotlyChart';
 import { RiskCards } from './RiskCards';
 import { StatsSummary } from './StatsSummary';
 import { UncertainPointsTable } from './UncertainPointsTable';
+import { GradientPointsTable } from './GradientPointsTable';
 import { RecommendationsList } from './RecommendationsList';
+import { CommentsSection } from './CommentsSection';
+import { PDFPreview } from './PDFPreview';
 import { usePotentialData } from '@/hooks/usePotentialData';
 import { generatePDF } from '@/utils/pdfGenerator';
 import { generateWord } from '@/utils/wordGenerator';
 import { toast } from 'sonner';
 
-type TabType = 'editor' | '3d' | 'gradient' | 'stats';
+type TabType = 'editor' | '3d' | 'gradient' | 'stats' | 'preview';
 
 export function PotentialMapGenerator() {
   const [activeTab, setActiveTab] = useState<TabType>('editor');
@@ -212,6 +215,7 @@ export function PotentialMapGenerator() {
     { id: '3d' as const, label: 'Superfície 3D', icon: Box },
     { id: 'gradient' as const, label: 'Gradientes', icon: AreaChart },
     { id: 'stats' as const, label: 'Relatório', icon: PieChart },
+    { id: 'preview' as const, label: 'Pré-visualização', icon: Eye },
   ];
 
   // 2D contour plot data
@@ -377,6 +381,8 @@ export function PotentialMapGenerator() {
                         xaxis: { title: 'X (m)', gridcolor: theme.grid },
                         yaxis: { title: 'Y (m)', gridcolor: theme.grid },
                         zaxis: { title: 'V', gridcolor: theme.grid },
+                        aspectmode: 'manual',
+                        aspectratio: { x: 1, y: 1.5, z: 0.5 },
                       },
                     }}
                   />
@@ -407,18 +413,22 @@ export function PotentialMapGenerator() {
                 </div>
               </div>
 
-              <div className="section-box">
-                <h4 className="text-sm font-semibold mb-3">Análise de Gradientes</h4>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="p-4 bg-secondary/50 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Gradiente Máximo</p>
-                    <p className="text-2xl font-bold font-mono">{maxGradient.toFixed(0)} mV/m</p>
-                  </div>
-                  <div className="p-4 bg-secondary/50 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Pontos Críticos (&gt;100)</p>
-                    <p className="text-2xl font-bold font-mono">{criticalGradients}</p>
+              <div className="grid lg:grid-cols-2 gap-6">
+                <div className="section-box">
+                  <h4 className="text-sm font-semibold mb-3">Análise de Gradientes</h4>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="p-4 bg-secondary/50 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Gradiente Máximo</p>
+                      <p className="text-2xl font-bold font-mono">{maxGradient.toFixed(0)} mV/m</p>
+                    </div>
+                    <div className="p-4 bg-secondary/50 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Pontos Críticos (&gt;100)</p>
+                      <p className="text-2xl font-bold font-mono">{criticalGradients}</p>
+                    </div>
                   </div>
                 </div>
+                
+                <GradientPointsTable points={gradients} />
               </div>
             </div>
           )}
@@ -470,7 +480,21 @@ export function PotentialMapGenerator() {
               </div>
 
               <RecommendationsList recommendations={recommendations} />
+              
+              <CommentsSection comments={comments} onChange={setComments} />
             </div>
+          )}
+
+          {/* Preview Tab */}
+          {activeTab === 'preview' && (
+            <PDFPreview
+              stats={stats}
+              uncertainPoints={uncertainPoints}
+              gradients={gradients}
+              recommendations={recommendations}
+              params={params}
+              comments={comments}
+            />
           )}
         </div>
       </main>
