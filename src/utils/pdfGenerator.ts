@@ -389,6 +389,79 @@ export async function generatePDF(
   
   yPos += 5;
 
+  // 6.2 Gradient Points Table
+  if (pdfData.gradients.length > 0) {
+    if (yPos > pageHeight - 60) {
+      pdf.addPage();
+      addHeader();
+    }
+
+    addSectionTitle('6.2 TABELA DE PONTOS DE GRADIENTE');
+    
+    const sortedGradients = [...pdfData.gradients].sort((a, b) => b.gradient - a.gradient);
+    const gradTableColWidths = [contentWidth * 0.25, contentWidth * 0.25, contentWidth * 0.25, contentWidth * 0.25];
+    
+    pdf.setFillColor(52, 73, 94);
+    pdf.rect(margin, yPos, contentWidth, 6, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Coord X (m)', margin + 3, yPos + 4);
+    pdf.text('Coord Y (m)', margin + gradTableColWidths[0] + 3, yPos + 4);
+    pdf.text('Gradiente (mV/m)', margin + gradTableColWidths[0] + gradTableColWidths[1] + 3, yPos + 4);
+    pdf.text('Status', margin + gradTableColWidths[0] + gradTableColWidths[1] + gradTableColWidths[2] + 3, yPos + 4);
+    yPos += 6;
+
+    sortedGradients.slice(0, 20).forEach((pt, i) => {
+      if (yPos + 6 > pageHeight - margin) {
+        pdf.addPage();
+        addHeader();
+        yPos = 35;
+      }
+
+      const bgColor = i % 2 === 0 ? [255, 255, 255] : [249, 249, 249];
+      pdf.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+      pdf.rect(margin, yPos, contentWidth, 5, 'F');
+      pdf.setDrawColor(230, 230, 230);
+      pdf.rect(margin, yPos, contentWidth, 5, 'S');
+      
+      pdf.setTextColor(51, 51, 51);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.text(formatNumber(pt.x), margin + 3, yPos + 3.5);
+      pdf.text(formatNumber(pt.y), margin + gradTableColWidths[0] + 3, yPos + 3.5);
+      
+      const isCritical = pt.gradient > 100;
+      const isWarning = pt.gradient > 50 && pt.gradient <= 100;
+      
+      if (isCritical) {
+        pdf.setTextColor(231, 76, 60);
+      } else if (isWarning) {
+        pdf.setTextColor(241, 196, 15);
+      } else {
+        pdf.setTextColor(46, 204, 113);
+      }
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(pt.gradient.toFixed(1), margin + gradTableColWidths[0] + gradTableColWidths[1] + 3, yPos + 3.5);
+      
+      pdf.setTextColor(51, 51, 51);
+      pdf.setFont('helvetica', 'normal');
+      const status = isCritical ? 'Crítico' : isWarning ? 'Atenção' : 'Normal';
+      pdf.text(status, margin + gradTableColWidths[0] + gradTableColWidths[1] + gradTableColWidths[2] + 3, yPos + 3.5);
+      yPos += 5;
+    });
+
+    if (pdfData.gradients.length > 20) {
+      pdf.setTextColor(100, 100, 100);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(8);
+      pdf.text(`... e mais ${pdfData.gradients.length - 20} pontos não listados`, margin, yPos + 5);
+      yPos += 10;
+    }
+    
+    yPos += 5;
+  }
+
   // 7. Uncertain Points Table
   if (pdfData.uncertainPoints.length > 0) {
     if (yPos > pageHeight - 60) {
