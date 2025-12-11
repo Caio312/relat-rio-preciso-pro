@@ -109,6 +109,8 @@ export function PotentialMapGenerator() {
           recommendations,
           params,
           comments,
+          inspectionInfo,
+          photos,
         },
         {
           plot2d: plot2dRef.current,
@@ -125,7 +127,7 @@ export function PotentialMapGenerator() {
     } finally {
       setIsGeneratingPDF(false);
     }
-  }, [data, stats, uncertainPoints, gradients, recommendations, params, comments]);
+  }, [data, stats, uncertainPoints, gradients, recommendations, params, comments, inspectionInfo, photos]);
 
   const handleGenerateWord = useCallback(async () => {
     setIsGeneratingWord(true);
@@ -141,6 +143,8 @@ export function PotentialMapGenerator() {
           recommendations,
           params,
           comments,
+          inspectionInfo,
+          photos,
         },
         {
           plot2d: plot2dRef.current,
@@ -157,7 +161,7 @@ export function PotentialMapGenerator() {
     } finally {
       setIsGeneratingWord(false);
     }
-  }, [data, stats, uncertainPoints, gradients, recommendations, params, comments]);
+  }, [data, stats, uncertainPoints, gradients, recommendations, params, comments, inspectionInfo, photos]);
 
 
   const theme = useMemo(
@@ -232,13 +236,14 @@ export function PotentialMapGenerator() {
       y: reversedY,
       type: 'contour' as const,
       colorscale: params.colorscale,
+      ncontours: 25,
       contours: {
         coloring: 'heatmap',
         showlabels: true,
         labelfont: { color: 'white', size: 10 },
       },
-      line: { color: isDarkMode ? '#64748b' : '#334155', width: 0.5 },
-      colorbar: { title: 'V', tickformat: '.2f' },
+      line: { color: isDarkMode ? '#64748b' : '#334155', width: 0.8, smoothing: 1.3 },
+      colorbar: { title: 'V', tickformat: '.3f' },
     }];
   }, [hasValidData, reversedZ, data.xVals, reversedY, params.colorscale, isDarkMode]);
 

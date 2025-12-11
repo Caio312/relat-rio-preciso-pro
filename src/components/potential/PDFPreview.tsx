@@ -63,9 +63,14 @@ export function PDFPreview({
       y: reversedY,
       type: 'contour' as const,
       colorscale: params.colorscale,
-      contours: { coloring: 'heatmap', showlabels: true, labelfont: { color: 'white', size: 8 } },
-      line: { color: '#334155', width: 0.5 },
-      colorbar: { title: 'V', tickformat: '.2f' },
+      ncontours: 25,
+      contours: { 
+        coloring: 'heatmap', 
+        showlabels: true, 
+        labelfont: { color: 'white', size: 8 },
+      },
+      line: { color: '#334155', width: 0.8, smoothing: 1.3 },
+      colorbar: { title: 'V', tickformat: '.3f' },
     }];
   }, [hasValidData, reversedZ, data.xVals, reversedY, params.colorscale]);
 
