@@ -14,7 +14,6 @@ import { PhotoUpload } from './PhotoUpload';
 import { PDFPreview } from './PDFPreview';
 import { usePotentialData } from '@/hooks/usePotentialData';
 import { generatePDF } from '@/utils/pdfGenerator';
-import { generateWord } from '@/utils/wordGenerator';
 import { toast } from 'sonner';
 import { InspectionInfo, AttachedPhoto, DEFAULT_INSPECTION_INFO } from '@/types/potential';
 
@@ -24,7 +23,6 @@ export function PotentialMapGenerator() {
   const [activeTab, setActiveTab] = useState<TabType>('editor');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [isGeneratingWord, setIsGeneratingWord] = useState(false);
   const [comments, setComments] = useState('');
   const [inspectionInfo, setInspectionInfo] = useState<InspectionInfo>(DEFAULT_INSPECTION_INFO);
   const [photos, setPhotos] = useState<AttachedPhoto[]>([]);
@@ -129,39 +127,6 @@ export function PotentialMapGenerator() {
     }
   }, [data, stats, uncertainPoints, gradients, recommendations, params, comments, inspectionInfo, photos]);
 
-  const handleGenerateWord = useCallback(async () => {
-    setIsGeneratingWord(true);
-    toast.info('Gerando relatório Word...');
-
-    try {
-      await generateWord(
-        {
-          data,
-          stats,
-          uncertainPoints,
-          gradients,
-          recommendations,
-          params,
-          comments,
-          inspectionInfo,
-          photos,
-        },
-        {
-          plot2d: plot2dRef.current,
-          plot3d: plot3dRef.current,
-          plotHist: plotHistRef.current,
-          plotPie: plotPieRef.current,
-          plotGradient: plotGradientRef.current,
-        }
-      );
-      toast.success('Relatório Word gerado com sucesso!');
-    } catch (error) {
-      console.error('Error generating Word:', error);
-      toast.error('Erro ao gerar Word. Tente novamente.');
-    } finally {
-      setIsGeneratingWord(false);
-    }
-  }, [data, stats, uncertainPoints, gradients, recommendations, params, comments, inspectionInfo, photos]);
 
 
   const theme = useMemo(
@@ -322,11 +287,9 @@ export function PotentialMapGenerator() {
         onImportCSV={handleImportCSV}
         onExportCSV={handleExportCSV}
         onGeneratePDF={handleGeneratePDF}
-        onGenerateWord={handleGenerateWord}
         isDarkMode={isDarkMode}
         onToggleDarkMode={toggleDarkMode}
         isGeneratingPDF={isGeneratingPDF}
-        isGeneratingWord={isGeneratingWord}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden">

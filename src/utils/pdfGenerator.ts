@@ -27,35 +27,43 @@ export interface PDFData {
   photos?: AttachedPhoto[];
 }
 
-async function captureChartImage(element: HTMLElement | null): Promise<string | null> {
+async function captureChartImage(element: HTMLElement | null, width = 1200, height = 600): Promise<string | null> {
   if (!element) return null;
   
   try {
-    // Try to use Plotly's toImage if the element has a plotly graph
-    const plotlyDiv = element.querySelector('.js-plotly-plot') as HTMLElement;
-    if (plotlyDiv) {
+    // Wait for chart to be fully rendered
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Find the actual Plotly div - it may be nested
+    const plotlyDiv = element.querySelector('.js-plotly-plot') || element.querySelector('[class*="plotly"]');
+    
+    if (plotlyDiv && typeof Plotly !== 'undefined') {
       try {
         const imgData = await Plotly.toImage(plotlyDiv, {
           format: 'png',
-          width: 800,
-          height: 400,
+          width: width,
+          height: height,
           scale: 2,
         });
-        return imgData;
+        if (imgData && imgData.startsWith('data:image')) {
+          return imgData;
+        }
       } catch (e) {
-        console.warn('Plotly toImage failed, falling back to html2canvas');
+        console.warn('Plotly toImage failed:', e);
       }
     }
     
-    // Fallback to html2canvas
+    // Fallback to html2canvas with improved settings
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
       allowTaint: true,
+      width: element.offsetWidth,
+      height: element.offsetHeight,
     });
-    return canvas.toDataURL('image/png');
+    return canvas.toDataURL('image/png', 1.0);
   } catch (error) {
     console.error('Error capturing chart:', error);
     return null;
