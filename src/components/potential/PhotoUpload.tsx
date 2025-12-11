@@ -11,41 +11,52 @@ interface PhotoUploadProps {
 export function PhotoUpload({ photos, onChange }: PhotoUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
     const maxSize = 5 * 1024 * 1024; // 5MB
-    const newPhotos: AttachedPhoto[] = [];
-
-    Array.from(files).forEach((file) => {
+    
+    // Filter valid files
+    const validFiles = Array.from(files).filter((file) => {
       if (!file.type.startsWith('image/')) {
         toast.error(`${file.name} não é uma imagem válida`);
-        return;
+        return false;
       }
-
       if (file.size > maxSize) {
         toast.error(`${file.name} excede o tamanho máximo de 5MB`);
-        return;
+        return false;
       }
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        newPhotos.push({
-          id: `photo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: file.name,
-          dataUrl,
-          description: '',
-        });
-
-        if (newPhotos.length === files.length || newPhotos.length === Array.from(files).filter(f => f.type.startsWith('image/') && f.size <= maxSize).length) {
-          onChange([...photos, ...newPhotos]);
-          toast.success(`${newPhotos.length} foto(s) adicionada(s)`);
-        }
-      };
-      reader.readAsDataURL(file);
+      return true;
     });
+
+    if (validFiles.length === 0) return;
+
+    // Process all files with Promise.all
+    const processFile = (file: File): Promise<AttachedPhoto> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string;
+          resolve({
+            id: `photo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            name: file.name,
+            dataUrl,
+            description: '',
+          });
+        };
+        reader.onerror = () => reject(new Error(`Erro ao ler ${file.name}`));
+        reader.readAsDataURL(file);
+      });
+    };
+
+    try {
+      const newPhotos = await Promise.all(validFiles.map(processFile));
+      onChange([...photos, ...newPhotos]);
+      toast.success(`${newPhotos.length} foto(s) adicionada(s)`);
+    } catch (error) {
+      toast.error('Erro ao processar algumas fotos');
+    }
 
     if (inputRef.current) {
       inputRef.current.value = '';

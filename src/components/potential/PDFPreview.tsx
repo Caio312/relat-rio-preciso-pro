@@ -316,7 +316,7 @@ export function PDFPreview({
           {/* 4. 2D Map */}
           <section>
             <h2 className="bg-slate-700 text-white px-3 py-2 text-sm font-bold rounded">4. MAPA DE POTENCIAIS (2D)</h2>
-            <div className="mt-3 h-56 border rounded">
+            <div className="mt-3 h-80 border rounded">
               {contourData.length > 0 && (
                 <PlotlyChart
                   data={contourData}
@@ -333,7 +333,7 @@ export function PDFPreview({
           {/* 5. 3D Surface */}
           <section>
             <h2 className="bg-slate-700 text-white px-3 py-2 text-sm font-bold rounded">5. TOPOGRAFIA 3D (VISTA ISOMÉTRICA)</h2>
-            <div className="mt-3 h-56 border rounded">
+            <div className="mt-3 h-72 border rounded">
               {surfaceData.length > 0 && (
                 <PlotlyChart
                   data={surfaceData}
@@ -356,7 +356,7 @@ export function PDFPreview({
           {/* 6. Gradients */}
           <section>
             <h2 className="bg-slate-700 text-white px-3 py-2 text-sm font-bold rounded">6. MAPA DE GRADIENTES DE POTENCIAL</h2>
-            <div className="mt-3 h-48 border rounded">
+            <div className="mt-3 h-64 border rounded">
               {gradientData.length > 0 && (
                 <PlotlyChart
                   data={gradientData}
