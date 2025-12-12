@@ -43,6 +43,7 @@ export function PotentialMapGenerator() {
     stats,
     uncertainPoints,
     gradients,
+    gradientMatrix,
     recommendations,
     updateCell,
     updateGrid,
@@ -98,26 +99,17 @@ export function PotentialMapGenerator() {
     toast.info('Gerando relatório PDF...');
 
     try {
-      await generatePDF(
-        {
-          data,
-          stats,
-          uncertainPoints,
-          gradients,
-          recommendations,
-          params,
-          comments,
-          inspectionInfo,
-          photos,
-        },
-        {
-          plot2d: plot2dRef.current,
-          plot3d: plot3dRef.current,
-          plotHist: plotHistRef.current,
-          plotPie: plotPieRef.current,
-          plotGradient: plotGradientRef.current,
-        }
-      );
+      await generatePDF({
+        data,
+        stats,
+        uncertainPoints,
+        gradients,
+        recommendations,
+        params,
+        comments,
+        inspectionInfo,
+        photos,
+      });
       toast.success('Relatório PDF gerado com sucesso!');
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -273,6 +265,43 @@ export function PotentialMapGenerator() {
     }];
   }, [stats]);
 
+  // Gradient 2D contour data
+  const gradientContourData = useMemo(() => {
+    if (!gradientMatrix.matrix.length || !gradientMatrix.xVals.length) return [];
+    const reversedZ = [...gradientMatrix.matrix].reverse();
+    const reversedY = [...gradientMatrix.yVals].reverse();
+    return [{
+      z: reversedZ,
+      x: gradientMatrix.xVals,
+      y: reversedY,
+      type: 'contour' as const,
+      colorscale: 'Hot',
+      ncontours: 20,
+      contours: {
+        coloring: 'heatmap',
+        showlabels: true,
+        labelfont: { color: 'white', size: 10 },
+      },
+      line: { color: '#334155', width: 0.8, smoothing: 1.3 },
+      colorbar: { title: 'mV/m' },
+    }];
+  }, [gradientMatrix]);
+
+  // Gradient 3D surface data
+  const gradientSurfaceData = useMemo(() => {
+    if (!gradientMatrix.matrix.length || !gradientMatrix.xVals.length) return [];
+    const reversedZ = [...gradientMatrix.matrix].reverse();
+    const reversedY = [...gradientMatrix.yVals].reverse();
+    return [{
+      z: reversedZ,
+      x: gradientMatrix.xVals,
+      y: reversedY,
+      type: 'surface' as const,
+      colorscale: 'Hot',
+      colorbar: { title: 'mV/m' },
+    }];
+  }, [gradientMatrix]);
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar
@@ -367,10 +396,57 @@ export function PotentialMapGenerator() {
           {/* Gradient Tab */}
           {activeTab === 'gradient' && (
             <div className="space-y-6 animate-fade-in">
+              {/* 2D Gradient Contour Map */}
               <div className="plot-container h-[400px]">
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-accent" />
-                  Mapa de Gradientes
+                  Mapa de Gradientes 2D (Contorno)
+                </h3>
+                <div className="h-[calc(100%-2rem)]">
+                  {gradientContourData.length > 0 && (
+                    <PlotlyChart
+                      data={gradientContourData}
+                      layout={{
+                        ...plotLayout,
+                        xaxis: { title: 'Largura (m)', gridcolor: theme.grid },
+                        yaxis: { title: 'Altura (m)', scaleanchor: 'x', gridcolor: theme.grid },
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* 3D Gradient Surface */}
+              <div className="plot-container h-[500px]">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-accent" />
+                  Superfície 3D de Gradientes
+                </h3>
+                <div className="h-[calc(100%-2rem)]">
+                  {gradientSurfaceData.length > 0 && (
+                    <PlotlyChart
+                      data={gradientSurfaceData}
+                      layout={{
+                        ...plotLayout,
+                        margin: { t: 10, b: 10, l: 10, r: 10 },
+                        scene: {
+                          xaxis: { title: 'X (m)', gridcolor: theme.grid },
+                          yaxis: { title: 'Y (m)', gridcolor: theme.grid },
+                          zaxis: { title: 'Gradiente (mV/m)', gridcolor: theme.grid },
+                          aspectmode: 'manual',
+                          aspectratio: { x: 1, y: 1.5, z: 0.5 },
+                        },
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Original Scatter Plot */}
+              <div className="plot-container h-[350px]">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-accent" />
+                  Pontos de Gradiente (Scatter)
                 </h3>
                 <div className="h-[calc(100%-2rem)]" ref={plotGradientRef}>
                   {gradientData.length > 0 && (
