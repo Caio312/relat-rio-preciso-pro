@@ -27,45 +27,56 @@ export interface PDFData {
   photos?: AttachedPhoto[];
 }
 
-async function captureChartImage(element: HTMLElement | null, width = 1200, height = 600): Promise<string | null> {
-  if (!element) return null;
+// Create a temporary div, render Plotly chart, capture image, then clean up
+async function renderAndCaptureChart(
+  chartData: any[],
+  chartLayout: any,
+  width = 1200,
+  height = 600
+): Promise<string | null> {
+  if (!chartData || chartData.length === 0) return null;
+  
+  const tempDiv = document.createElement('div');
+  tempDiv.style.width = `${width}px`;
+  tempDiv.style.height = `${height}px`;
+  tempDiv.style.position = 'absolute';
+  tempDiv.style.left = '-9999px';
+  tempDiv.style.top = '-9999px';
+  document.body.appendChild(tempDiv);
   
   try {
-    // Wait for chart to be fully rendered
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Render the chart
+    await Plotly.newPlot(tempDiv, chartData, {
+      ...chartLayout,
+      width,
+      height,
+    }, { displayModeBar: false });
     
-    // Find the actual Plotly div - it may be nested
-    const plotlyDiv = element.querySelector('.js-plotly-plot') || element.querySelector('[class*="plotly"]');
+    // Wait for render
+    await new Promise(resolve => setTimeout(resolve, 300));
     
-    if (plotlyDiv && typeof Plotly !== 'undefined') {
-      try {
-        const imgData = await Plotly.toImage(plotlyDiv, {
-          format: 'png',
-          width: width,
-          height: height,
-          scale: 2,
-        });
-        if (imgData && imgData.startsWith('data:image')) {
-          return imgData;
-        }
-      } catch (e) {
-        console.warn('Plotly toImage failed:', e);
-      }
-    }
-    
-    // Fallback to html2canvas with improved settings
-    const canvas = await html2canvas(element, {
+    // Capture image
+    const imgData = await Plotly.toImage(tempDiv, {
+      format: 'png',
+      width: width,
+      height: height,
       scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      allowTaint: true,
-      width: element.offsetWidth,
-      height: element.offsetHeight,
     });
-    return canvas.toDataURL('image/png', 1.0);
+    
+    // Clean up
+    Plotly.purge(tempDiv);
+    document.body.removeChild(tempDiv);
+    
+    if (imgData && imgData.startsWith('data:image')) {
+      return imgData;
+    }
+    return null;
   } catch (error) {
-    console.error('Error capturing chart:', error);
+    console.error('Error rendering chart for PDF:', error);
+    try {
+      Plotly.purge(tempDiv);
+      document.body.removeChild(tempDiv);
+    } catch (e) {}
     return null;
   }
 }
@@ -87,14 +98,7 @@ Interpretação (ASTM C876):
 Gradientes elevados em regiões com potenciais negativos indicam zonas anódicas ativas onde a corrosão está progredindo.`;
 
 export async function generatePDF(
-  pdfData: PDFData,
-  chartRefs: {
-    plot2d: HTMLElement | null;
-    plot3d: HTMLElement | null;
-    plotHist: HTMLElement | null;
-    plotPie: HTMLElement | null;
-    plotGradient: HTMLElement | null;
-  }
+  pdfData: PDFData
 ): Promise<void> {
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
@@ -106,7 +110,73 @@ export async function generatePDF(
   const inspectionDate = pdfData.inspectionInfo?.date 
     ? new Date(pdfData.inspectionInfo.date + 'T00:00:00').toLocaleDateString('pt-BR')
     : new Date().toLocaleDateString('pt-BR');
-  const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  // Prepare chart data
+  const { data, params, stats, gradients } = pdfData;
+  const hasValidData = data && data.matrix && data.matrix.length > 0 && data.xVals && data.xVals.length > 0;
+  const reversedZ = hasValidData ? [...data.matrix].reverse() : [[0]];
+  const reversedY = hasValidData ? [...data.yVals].reverse() : [0];
+  const flatValues = hasValidData ? data.matrix.flat().map((v) => v * 1000) : [0];
+
+  const chartLayout = {
+    paper_bgcolor: '#ffffff',
+    plot_bgcolor: '#ffffff',
+    font: { color: '#1e293b', family: 'Arial', size: 12 },
+    margin: { t: 30, b: 50, l: 60, r: 40 },
+  };
+
+  // Chart data definitions
+  const contourData = hasValidData ? [{
+    z: reversedZ,
+    x: data.xVals,
+    y: reversedY,
+    type: 'contour' as const,
+    colorscale: params.colorscale,
+    ncontours: 25,
+    contours: { coloring: 'heatmap', showlabels: true, labelfont: { color: 'white', size: 10 } },
+    line: { color: '#334155', width: 0.8, smoothing: 1.3 },
+    colorbar: { title: 'V', tickformat: '.3f' },
+  }] : [];
+
+  const surfaceData = hasValidData ? [{
+    z: reversedZ,
+    x: data.xVals,
+    y: reversedY,
+    type: 'surface' as const,
+    colorscale: params.colorscale,
+    colorbar: { title: 'V' },
+  }] : [];
+
+  const gradientScatterData = gradients.length > 0 ? [{
+    x: gradients.map((g) => g.x),
+    y: gradients.map((g) => g.y),
+    mode: 'markers' as const,
+    type: 'scatter' as const,
+    marker: {
+      color: gradients.map((g) => g.gradient),
+      size: 14,
+      colorscale: 'Hot',
+      symbol: 'square',
+      colorbar: { title: 'mV/m' },
+    },
+  }] : [];
+
+  const histogramData = hasValidData ? [{
+    x: flatValues,
+    type: 'histogram' as const,
+    marker: { color: 'hsl(220, 70%, 50%)' },
+    nbinsx: 15,
+  }] : [];
+
+  const pieData = [{
+    values: [stats.severe.count, stats.uncertain.count, stats.low.count],
+    labels: ['Alto Risco', 'Incerto', 'Baixo Risco'],
+    type: 'pie' as const,
+    marker: { colors: ['hsl(0, 70%, 50%)', 'hsl(45, 90%, 50%)', 'hsl(145, 60%, 45%)'] },
+    textinfo: 'label+percent',
+    textfont: { color: 'white' },
+    hole: 0.4,
+  }];
 
   // Helper functions
   const addHeader = () => {
@@ -295,27 +365,6 @@ export async function generatePDF(
   pdf.text('* Limites baseados na ASTM C876-15 para eletrodo de referência ' + pdfData.params.electrode, margin, yPos);
   yPos += 10;
 
-  // Capture charts
-  const [pieImg, histImg] = await Promise.all([
-    captureChartImage(chartRefs.plotPie),
-    captureChartImage(chartRefs.plotHist),
-  ]);
-
-  if (pieImg || histImg) {
-    if (yPos + 50 > pageHeight - margin) {
-      pdf.addPage();
-      addHeader();
-    }
-    const chartWidth = (contentWidth - 6) / 2;
-    if (histImg) {
-      pdf.addImage(histImg, 'PNG', margin, yPos, chartWidth, 45);
-    }
-    if (pieImg) {
-      pdf.addImage(pieImg, 'PNG', margin + chartWidth + 6, yPos, chartWidth, 45);
-    }
-    yPos += 50;
-  }
-
   // 3. Recommendations
   addSectionTitle('3. RECOMENDAÇÕES TÉCNICAS');
   
@@ -357,6 +406,32 @@ export async function generatePDF(
     yPos += 15 + descLines.length * 4 + 3;
   });
 
+  // Capture distribution charts
+  const [pieImg, histImg] = await Promise.all([
+    renderAndCaptureChart(pieData, { ...chartLayout, showlegend: false }, 600, 400),
+    renderAndCaptureChart(histogramData, {
+      ...chartLayout,
+      title: { text: 'Distribuição de Potenciais (mV)', font: { size: 14 } },
+      xaxis: { title: 'Potencial (mV)' },
+      yaxis: { title: 'Frequência' },
+    }, 600, 400),
+  ]);
+
+  if (pieImg || histImg) {
+    if (yPos + 50 > pageHeight - margin) {
+      pdf.addPage();
+      addHeader();
+    }
+    const chartWidth = (contentWidth - 6) / 2;
+    if (histImg) {
+      pdf.addImage(histImg, 'PNG', margin, yPos, chartWidth, 45);
+    }
+    if (pieImg) {
+      pdf.addImage(pieImg, 'PNG', margin + chartWidth + 6, yPos, chartWidth, 45);
+    }
+    yPos += 50;
+  }
+
   // New page for maps
   pdf.addPage();
   addHeader();
@@ -364,7 +439,12 @@ export async function generatePDF(
   // 4. 2D Potential Map
   addSectionTitle('4. MAPA DE POTENCIAIS (2D)');
   
-  const map2dImg = await captureChartImage(chartRefs.plot2d);
+  const map2dImg = await renderAndCaptureChart(contourData, {
+    ...chartLayout,
+    xaxis: { title: 'Largura (m)' },
+    yaxis: { title: 'Altura (m)', scaleanchor: 'x' },
+  }, 1200, 700);
+  
   if (map2dImg) {
     const imgHeight = 65;
     pdf.addImage(map2dImg, 'PNG', margin, yPos, contentWidth, imgHeight);
@@ -374,7 +454,18 @@ export async function generatePDF(
   // 5. 3D Surface (Isometric View)
   addSectionTitle('5. TOPOGRAFIA 3D (VISTA ISOMÉTRICA)');
   
-  const map3dImg = await captureChartImage(chartRefs.plot3d);
+  const map3dImg = await renderAndCaptureChart(surfaceData, {
+    ...chartLayout,
+    margin: { t: 10, b: 10, l: 10, r: 10 },
+    scene: {
+      xaxis: { title: 'X (m)' },
+      yaxis: { title: 'Y (m)' },
+      zaxis: { title: 'V' },
+      aspectmode: 'manual',
+      aspectratio: { x: 1, y: 1.5, z: 0.5 },
+    },
+  }, 1200, 700);
+  
   if (map3dImg) {
     const imgHeight = 60;
     pdf.addImage(map3dImg, 'PNG', margin, yPos, contentWidth, imgHeight);
@@ -395,7 +486,12 @@ export async function generatePDF(
   // 6. Gradient Map with explanation
   addSectionTitle('6. MAPA DE GRADIENTES DE POTENCIAL');
   
-  const gradImg = await captureChartImage(chartRefs.plotGradient);
+  const gradImg = await renderAndCaptureChart(gradientScatterData, {
+    ...chartLayout,
+    xaxis: { title: 'Largura (m)' },
+    yaxis: { title: 'Altura (m)', scaleanchor: 'x' },
+  }, 1200, 600);
+  
   if (gradImg) {
     const imgHeight = 50;
     pdf.addImage(gradImg, 'PNG', margin, yPos, contentWidth, imgHeight);

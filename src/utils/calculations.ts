@@ -99,6 +99,36 @@ export function calculateGradients(data: PotentialData): GradientPoint[] {
   return grads;
 }
 
+export interface GradientMatrix {
+  xVals: number[];
+  yVals: number[];
+  matrix: number[][];
+}
+
+export function calculateGradientMatrix(data: PotentialData): GradientMatrix {
+  const dx = Math.abs(data.xVals[1] - data.xVals[0]) || 1;
+  const dy = Math.abs(data.yVals[1] - data.yVals[0]) || 1;
+  
+  const matrix: number[][] = [];
+  
+  for (let r = 0; r < data.matrix.length - 1; r++) {
+    const row: number[] = [];
+    for (let c = 0; c < data.matrix[r].length - 1; c++) {
+      const gradX = Math.abs(data.matrix[r][c + 1] - data.matrix[r][c]) / dx;
+      const gradY = Math.abs(data.matrix[r + 1][c] - data.matrix[r][c]) / dy;
+      const g = Math.max(gradX, gradY) * 1000;
+      row.push(g);
+    }
+    matrix.push(row);
+  }
+  
+  // Use the first N-1 x and y values
+  const xVals = data.xVals.slice(0, -1);
+  const yVals = data.yVals.slice(0, -1);
+  
+  return { xVals, yVals, matrix };
+}
+
 export function generateRecommendations(
   stats: Statistics,
   gradients: GradientPoint[],

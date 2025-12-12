@@ -15,8 +15,10 @@ import {
   calculateStatistics,
   getUncertainPoints,
   calculateGradients,
+  calculateGradientMatrix,
   generateRecommendations,
   parseArray,
+  GradientMatrix,
 } from '@/utils/calculations';
 
 export function usePotentialData() {
@@ -45,6 +47,10 @@ export function usePotentialData() {
 
   const gradients = useMemo<GradientPoint[]>(() => {
     return calculateGradients(data);
+  }, [data]);
+
+  const gradientMatrix = useMemo<GradientMatrix>(() => {
+    return calculateGradientMatrix(data);
   }, [data]);
 
   const recommendations = useMemo<Recommendation[]>(() => {
@@ -126,6 +132,7 @@ export function usePotentialData() {
     stats,
     uncertainPoints,
     gradients,
+    gradientMatrix,
     recommendations,
     updateCell,
     updateGrid,
