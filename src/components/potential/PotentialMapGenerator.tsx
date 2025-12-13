@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { Table, Box, AreaChart, PieChart, Loader2, Eye } from 'lucide-react';
 import { Sidebar } from './Sidebar';
+import { MobileNav } from './MobileNav';
 import { DataTable } from './DataTable';
 import { PlotlyChart } from './PlotlyChart';
 import { RiskCards } from './RiskCards';
@@ -26,6 +27,7 @@ export function PotentialMapGenerator() {
   const [comments, setComments] = useState('');
   const [inspectionInfo, setInspectionInfo] = useState<InspectionInfo>(DEFAULT_INSPECTION_INFO);
   const [photos, setPhotos] = useState<AttachedPhoto[]>([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [xInput, setXInput] = useState('0,00; 0,15; 0,30');
   const [yInput, setYInput] = useState(
     '1,94; 1,84; 1,74; 1,64; 1,54; 1,44; 1,34; 1,24; 1,14; 1,04; 0,94; 0,84; 0,74; 0,64; 0,54'
@@ -302,33 +304,48 @@ export function PotentialMapGenerator() {
     }];
   }, [gradientMatrix]);
 
+  const sidebarContent = (
+    <Sidebar
+      params={params}
+      xInput={xInput}
+      yInput={yInput}
+      onXInputChange={setXInput}
+      onYInputChange={setYInput}
+      onGenerateGrid={handleGenerateGrid}
+      onElectrodeChange={updateElectrode}
+      onParamsChange={updateParams}
+      onImportCSV={handleImportCSV}
+      onExportCSV={handleExportCSV}
+      onGeneratePDF={() => {
+        handleGeneratePDF();
+        setIsMobileMenuOpen(false);
+      }}
+      isDarkMode={isDarkMode}
+      onToggleDarkMode={toggleDarkMode}
+      isGeneratingPDF={isGeneratingPDF}
+    />
+  );
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar
-        params={params}
-        xInput={xInput}
-        yInput={yInput}
-        onXInputChange={setXInput}
-        onYInputChange={setYInput}
-        onGenerateGrid={handleGenerateGrid}
-        onElectrodeChange={updateElectrode}
-        onParamsChange={updateParams}
-        onImportCSV={handleImportCSV}
-        onExportCSV={handleExportCSV}
-        onGeneratePDF={handleGeneratePDF}
-        isDarkMode={isDarkMode}
-        onToggleDarkMode={toggleDarkMode}
-        isGeneratingPDF={isGeneratingPDF}
-      />
+      {/* Mobile Navigation */}
+      <MobileNav isOpen={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+        {sidebarContent}
+      </MobileNav>
+
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:block">
+        {sidebarContent}
+      </div>
 
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Tabs Header */}
-        <div className="flex bg-card border-b border-border px-4">
+        <div className="flex bg-card border-b border-border px-4 pl-16 lg:pl-4 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`tab-button flex items-center gap-2 ${activeTab === tab.id ? 'active' : ''}`}
+              className={`tab-button flex items-center gap-2 whitespace-nowrap ${activeTab === tab.id ? 'active' : ''}`}
             >
               <tab.icon className="w-4 h-4" />
               <span className="hidden sm:inline">{tab.label}</span>
@@ -337,19 +354,19 @@ export function PotentialMapGenerator() {
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6">
           {/* Editor Tab */}
           {activeTab === 'editor' && (
-            <div className="grid lg:grid-cols-2 gap-6 h-full animate-fade-in">
-              <div className="overflow-auto">
+            <div className="grid lg:grid-cols-2 gap-4 lg:gap-6 animate-fade-in">
+              <div className="overflow-auto max-h-[50vh] lg:max-h-none">
                 <DataTable data={data} onCellChange={updateCell} />
               </div>
-              <div className="plot-container min-h-[500px]">
+              <div className="plot-container min-h-[350px] lg:min-h-[500px]">
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-accent" />
                   Mapa de Potenciais 2D
                 </h3>
-                <div className="h-[calc(100%-2rem)]" ref={plot2dRef}>
+                <div className="h-[300px] lg:h-[calc(100%-2rem)]" ref={plot2dRef}>
                   {hasValidData && contourData.length > 0 && (
                     <PlotlyChart
                       data={contourData}
@@ -367,7 +384,7 @@ export function PotentialMapGenerator() {
 
           {/* 3D Tab */}
           {activeTab === '3d' && (
-            <div className="plot-container h-[600px] animate-fade-in">
+            <div className="plot-container h-[400px] lg:h-[600px] animate-fade-in">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-accent" />
                 Topografia 3D
@@ -395,9 +412,9 @@ export function PotentialMapGenerator() {
 
           {/* Gradient Tab */}
           {activeTab === 'gradient' && (
-            <div className="space-y-6 animate-fade-in">
+            <div className="space-y-4 lg:space-y-6 animate-fade-in">
               {/* 2D Gradient Contour Map */}
-              <div className="plot-container h-[400px]">
+              <div className="plot-container h-[300px] lg:h-[400px]">
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-accent" />
                   Mapa de Gradientes 2D (Contorno)
@@ -417,7 +434,7 @@ export function PotentialMapGenerator() {
               </div>
 
               {/* 3D Gradient Surface */}
-              <div className="plot-container h-[500px]">
+              <div className="plot-container h-[350px] lg:h-[500px]">
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-accent" />
                   Superfície 3D de Gradientes
@@ -443,7 +460,7 @@ export function PotentialMapGenerator() {
               </div>
 
               {/* Original Scatter Plot */}
-              <div className="plot-container h-[350px]">
+              <div className="plot-container h-[280px] lg:h-[350px]">
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-accent" />
                   Pontos de Gradiente (Scatter)
@@ -462,17 +479,17 @@ export function PotentialMapGenerator() {
                 </div>
               </div>
 
-              <div className="grid lg:grid-cols-2 gap-6">
+              <div className="grid lg:grid-cols-2 gap-4 lg:gap-6">
                 <div className="section-box">
                   <h4 className="text-sm font-semibold mb-3">Análise de Gradientes</h4>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="p-4 bg-secondary/50 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Gradiente Máximo</p>
-                      <p className="text-2xl font-bold font-mono">{maxGradient.toFixed(0)} mV/m</p>
+                  <div className="grid grid-cols-2 gap-3 lg:gap-4">
+                    <div className="p-3 lg:p-4 bg-secondary/50 rounded-lg">
+                      <p className="text-xs lg:text-sm text-muted-foreground">Gradiente Máximo</p>
+                      <p className="text-lg lg:text-2xl font-bold font-mono">{maxGradient.toFixed(0)} mV/m</p>
                     </div>
-                    <div className="p-4 bg-secondary/50 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Pontos Críticos (&gt;100)</p>
-                      <p className="text-2xl font-bold font-mono">{criticalGradients}</p>
+                    <div className="p-3 lg:p-4 bg-secondary/50 rounded-lg">
+                      <p className="text-xs lg:text-sm text-muted-foreground">Pontos Críticos (&gt;100)</p>
+                      <p className="text-lg lg:text-2xl font-bold font-mono">{criticalGradients}</p>
                     </div>
                   </div>
                 </div>

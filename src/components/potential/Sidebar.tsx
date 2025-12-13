@@ -68,7 +68,7 @@ export function Sidebar({
   };
 
   return (
-    <aside className="w-80 flex-shrink-0 bg-sidebar text-sidebar-foreground border-r border-sidebar-border overflow-y-auto">
+    <aside className="w-80 flex-shrink-0 bg-sidebar text-sidebar-foreground border-r border-sidebar-border overflow-y-auto h-full">
       <div className="p-5">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
